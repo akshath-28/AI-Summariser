@@ -86,12 +86,12 @@ def get_transcript(video_id):
         # Fetch transcript using the internal API directly
         from youtube_transcript_api import YouTubeTranscriptApi
         
-        transcript_data = YouTubeTranscriptApi.get_transcript(video_id, languages=['en', 'en-US', 'en-GB'])
+        transcript_data = YouTubeTranscriptApi().fetch(video_id, languages=['en', 'en-US', 'en-GB'])
         
         transcript_list = []
         full_text_parts = []
         
-        for item in transcript_data:
+        for item in transcript_data.to_raw_data():
             text = item['text'].replace('\n', ' ').strip()
             total_seconds = item['start']
                 
