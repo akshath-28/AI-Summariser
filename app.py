@@ -9,9 +9,7 @@ import tempfile
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from groq import Groq
-import yt_dlp
-import webvtt
-import uuid
+
 
 # Try loading environment variables from a .env file (optional)
 try:
