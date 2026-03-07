@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>YT Summarizer — AI Video Intelligence</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════
+     BACKGROUND CANVAS (animated particles)
+═══════════════════════════════════════════════════════ -->
+<canvas id="bg-canvas"></canvas>
+
+<!-- ═══════════════════════════════════════════════════════
+     HEADER
+═══════════════════════════════════════════════════════ -->
+<header class="site-header">
+  <div class="logo">
+    <span class="logo-icon">▶</span>
+    <span class="logo-text">YT<em>Lens</em></span>
+  </div>
+  <p class="tagline">AI-powered YouTube intelligence</p>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════
+     MAIN LAYOUT
+═══════════════════════════════════════════════════════ -->
+<main class="main-layout">
+
+  <!-- LEFT PANEL: Input + Video Player -->
+  <aside class="left-panel">
+
+    <!-- URL Input Card -->
+    <div class="card input-card">
+      <label class="card-label">Paste a YouTube URL</label>
+      <div class="url-input-row">
+        <input
+          type="text"
+          id="yt-url"
+          class="url-input"
+          placeholder="https://youtube.com/watch?v=..."
+          autocomplete="off"
+        />
+        <button id="summarize-btn" class="btn-primary" onclick="summarizeVideo()">
+          <span class="btn-text">Summarize</span>
+          <span class="btn-icon">✦</span>
+        </button>
+      </div>
+      <!-- Error message slot -->
+      <p id="error-msg" class="error-msg hidden"></p>
+    </div>
+
+    <!-- Embedded Video Player (shown after URL is submitted) -->
+    <div id="video-wrapper" class="card video-card hidden">
+      <div class="video-label-row">
+        <span class="card-label">Now Playing</span>
+        <span id="video-id-badge" class="video-badge"></span>
+      </div>
+      <div class="video-container">
+        <iframe
+          id="yt-iframe"
+          src=""
+          frameborder="0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowfullscreen
+        ></iframe>
+      </div>
+    </div>
+
+    <!-- Loading State -->
+    <div id="loading-card" class="card loading-card hidden">
+      <div class="loader-wrap">
+        <div class="loader-ring"></div>
+        <div class="loader-ring ring2"></div>
+        <div class="loader-ring ring3"></div>
+      </div>
+      <p class="loading-text">Fetching transcript &amp; generating summary…</p>
+      <p class="loading-sub">This may take 10–20 seconds</p>
+    </div>
+
+  </aside>
+
+  <!-- RIGHT PANEL: Summary + Chat -->
+  <section class="right-panel">
+
+    <!-- Welcome / Empty State -->
+    <div id="empty-state" class="empty-state">
+      <div class="empty-icon">◈</div>
+      <h2>Drop a video. Get insights.</h2>
+      <p>Paste any YouTube URL and let the AI extract key points, timestamps, and takeaways in seconds.</p>
+      <ul class="feature-list">
+        <li><span>✦</span> Structured summary with timestamps</li>
+        <li><span>✦</span> Clickable timestamps jump to video</li>
+        <li><span>✦</span> Ask follow-up questions about the video</li>
+        <li><span>✦</span> One-click copy of the full summary</li>
+      </ul>
+    </div>
+
+    <!-- Summary Output Card -->
+    <div id="summary-card" class="card summary-card hidden">
+      <div class="summary-header">
+        <span class="card-label">AI Summary</span>
+        <button id="copy-btn" class="btn-ghost" onclick="copySummary()" title="Copy summary">
+          <span id="copy-icon">⎘</span> Copy
+        </button>
+      </div>
+      <div id="summary-content" class="summary-content"></div>
+    </div>
+
+    <!-- Chat Interface -->
+    <div id="chat-card" class="card chat-card hidden">
+      <div class="chat-header">
+        <span class="card-label">Ask about the video</span>
+        <span class="chat-badge">AI Chat</span>
+      </div>
+
+      <!-- Chat Messages -->
+      <div id="chat-messages" class="chat-messages">
+        <div class="chat-bubble assistant-bubble intro-bubble">
+          <span class="bubble-icon">◈</span>
+          <p>I've analyzed the video. Ask me anything about its content!</p>
+        </div>
+      </div>
+
+      <!-- Chat Input -->
+      <div class="chat-input-row">
+        <input
+          type="text"
+          id="chat-input"
+          class="chat-input"
+          placeholder="e.g. What are the main ideas discussed?"
+          onkeydown="handleChatKey(event)"
+        />
+        <button class="btn-send" onclick="sendQuestion()" title="Send">
+          ➤
+        </button>
+      </div>
+    </div>
+
+  </section>
+</main>
+
+<!-- ═══════════════════════════════════════════════════════
+     FOOTER
+═══════════════════════════════════════════════════════ -->
+<footer class="site-footer">
+  <p>Built with Flask · Gemini AI · youtube-transcript-api</p>
+</footer>
+
+<script src="/static/script.js"></script>
+</body>
+</html>
