@@ -39,7 +39,9 @@ if not GROQ_API_KEY:
 
 client = Groq(api_key=GROQ_API_KEY)
 
-MODEL = "llama-3.3-70b-versatile"
+# Switched model to standard Llama 3 8B to avoid rate limiting on the 70B model free tier.
+# You can also try "mixtral-8x7b-32768" or "llama-3.1-8b-instant"
+MODEL = "llama3-8b-8192"
 
 
 # ─────────────────────────────────────
