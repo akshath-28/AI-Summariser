@@ -9,6 +9,9 @@ import tempfile
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from groq import Groq
+import yt_dlp
+import uuid
+import webvtt
 
 
 # Try loading environment variables from a .env file (optional)
@@ -83,17 +86,46 @@ def extract_video_id(url):
 # ─────────────────────────────────────
 def get_transcript(video_id):
     try:
-        # Fetch transcript using the internal API directly
-        from youtube_transcript_api import YouTubeTranscriptApi
+        temp_dir = tempfile.gettempdir()
+        temp_filename = os.path.join(temp_dir, f"{str(uuid.uuid4())}.%(ext)s")
+        expected_filename = temp_filename.replace('%(ext)s', 'en.vtt')
         
-        transcript_data = YouTubeTranscriptApi().fetch(video_id, languages=['en', 'en-US', 'en-GB'])
+        # Bypassing the Render IP ban by skipping the standard youtube webpage checks
+        ydl_opts = {
+            'writesubtitles': True, 
+            'writeautomaticsub': True,
+            'subtitleslangs': ['en'], 
+            'skip_download': True, 
+            'quiet': True, 
+            'outtmpl': temp_filename,
+            # Critical bypasses for AWS/Render IPs
+            'extractor_args': {'youtube': {'player_client': ['web_safari', 'android']}},
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        }
+        
+        url = f"https://www.youtube.com/watch?v={video_id}"
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
+
+        if not os.path.exists(expected_filename):
+            raise ValueError("No transcript found (the video may not have English captions)")
+
+        vtt = webvtt.read(expected_filename)
         
         transcript_list = []
         full_text_parts = []
         
-        for item in transcript_data.to_raw_data():
-            text = item['text'].replace('\n', ' ').strip()
-            total_seconds = item['start']
+        for caption in vtt:
+            text = caption.text.replace('\n', ' ').strip()
+            text = re.sub(r'<[^>]+>', '', text) # clean any residual VTT tags
+            
+            try:
+                h, m, s = caption.start.split(':')
+                s, ms = s.split('.')
+                total_seconds = int(h) * 3600 + int(m) * 60 + int(s) + float(ms) / 1000
+            except:
+                total_seconds = 0
                 
             transcript_list.append({
                 "text": text,
@@ -102,11 +134,16 @@ def get_transcript(video_id):
             full_text_parts.append(text)
 
         full_text = " ".join(full_text_parts)
+        
+        try:
+            os.remove(expected_filename)
+        except:
+            pass
             
         return full_text, transcript_list
 
     except Exception as e:
-        raise ValueError(f"No transcript found or video blocked: {str(e)}")
+        raise ValueError(f"Transcript fetch failed: {str(e)}")
 
 
 
