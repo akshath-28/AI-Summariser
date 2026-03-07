@@ -165,6 +165,52 @@ def home():
 
 
 # ─────────────────────────────────────
+# Helpers: Chunking / Prompt Building
+# ─────────────────────────────────────
+
+def build_transcript_context(transcript_segment):
+    """Build a timestamped transcript string for a list of transcript segments."""
+    lines = []
+    for seg in transcript_segment:
+        ts = seconds_to_timestamp(seg["start"])
+        lines.append(f"[{ts}] {seg['text']}")
+    return "\n".join(lines)
+
+
+def chunk_transcript(transcript_list, max_chars=12000):
+    """Chunk transcript segments so each chunk is small enough for the model.
+
+    Args:
+        transcript_list: list of transcript dicts with `text` and `start`
+        max_chars: approximate maximum number of characters per chunk.
+
+    Returns:
+        List of transcript segments (each is a list of dicts).
+    """
+
+    chunks = []
+    current = []
+    current_len = 0
+
+    for seg in transcript_list:
+        line = f"[{seconds_to_timestamp(seg['start'])}] {seg['text']}\n"
+
+        # If adding this line would exceed the chunk size, finalize current chunk
+        if current and current_len + len(line) > max_chars:
+            chunks.append(current)
+            current = []
+            current_len = 0
+
+        current.append(seg)
+        current_len += len(line)
+
+    if current:
+        chunks.append(current)
+
+    return chunks
+
+
+# ─────────────────────────────────────
 # Summarize Endpoint
 # ─────────────────────────────────────
 @app.route("/summarize", methods=["POST"])
@@ -191,16 +237,15 @@ def summarize():
     except ValueError as e:
         return jsonify({"error": str(e)}), 422
 
-    # Build timestamp context
-    context = ""
+    # Chunk the transcript so we don't exceed token limits
+    chunks = chunk_transcript(transcript_list, max_chars=12000)
 
-    for seg in transcript_list:
+    summaries = []
 
-        ts = seconds_to_timestamp(seg["start"])
+    for index, chunk in enumerate(chunks, start=1):
+        context = build_transcript_context(chunk)
 
-        context += f"[{ts}] {seg['text']}\n"
-
-    prompt = f"""
+        prompt = f"""
 You are an expert YouTube video summarizer.
 
 Transcript:
@@ -214,18 +259,37 @@ Important Moments:
 Takeaways:
 """
 
-    try:
-        summary = call_llm(prompt)
+        try:
+            chunk_summary = call_llm(prompt)
+            summaries.append(chunk_summary.strip())
+        except Exception as e:
+            return jsonify({"error": str(e), "chunk": index}), 500
 
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    # If we generated multiple summaries, combine them into one final output
+    if len(summaries) > 1:
+        combine_prompt = """
+You are an expert YouTube video summarizer.
+
+Combine the following chunk summaries into a single summary in the same format.
+If there is overlap, merge similar points.
+
+"""
+
+        for idx, s in enumerate(summaries, start=1):
+            combine_prompt += f"--- Chunk {idx} ---\n{s}\n\n"
+
+        try:
+            summary = call_llm(combine_prompt)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    else:
+        summary = summaries[0]
 
     return jsonify({
-
         "video_id": video_id,
         "summary": summary,
         "transcript": full_text[:100000]
-
     })
 
 
