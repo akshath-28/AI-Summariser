@@ -90,7 +90,7 @@ def get_transcript(video_id):
         temp_filename = os.path.join(temp_dir, f"{str(uuid.uuid4())}.%(ext)s")
         expected_filename = temp_filename.replace('%(ext)s', 'en.vtt')
         
-        # Bypassing the Render IP ban by skipping the standard youtube webpage checks
+        # Bypassing the Render IP ban
         ydl_opts = {
             'writesubtitles': True, 
             'writeautomaticsub': True,
@@ -98,10 +98,18 @@ def get_transcript(video_id):
             'skip_download': True, 
             'quiet': True, 
             'outtmpl': temp_filename,
-            # Critical bypasses for AWS/Render IPs
             'extractor_args': {'youtube': {'player_client': ['web_safari', 'android']}},
             'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         }
+        
+        # Integrate Cookies if available in Environment Variables
+        youtube_cookies = os.getenv("YOUTUBE_COOKIES")
+        cookie_file = None
+        if youtube_cookies:
+            cookie_file = os.path.join(temp_dir, "youtube_cookies.txt")
+            with open(cookie_file, "w") as f:
+                f.write(youtube_cookies)
+            ydl_opts['cookiefile'] = cookie_file
         
         url = f"https://www.youtube.com/watch?v={video_id}"
         
@@ -140,6 +148,12 @@ def get_transcript(video_id):
         except:
             pass
             
+        if cookie_file and os.path.exists(cookie_file):
+            try:
+                os.remove(cookie_file)
+            except:
+                pass
+                
         return full_text, transcript_list
 
     except Exception as e:
