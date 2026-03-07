@@ -85,42 +85,17 @@ def extract_video_id(url):
 # ─────────────────────────────────────
 def get_transcript(video_id):
     try:
-        temp_dir = tempfile.gettempdir()
-        temp_filename = os.path.join(temp_dir, f"{str(uuid.uuid4())}.%(ext)s")
-        expected_filename = temp_filename.replace('%(ext)s', 'en.vtt')
+        # Fetch transcript using the internal API directly
+        from youtube_transcript_api import YouTubeTranscriptApi
         
-        ydl_opts = {
-            'writesubtitles': True, 
-            'writeautomaticsub': True,
-            'subtitleslangs': ['en'], 
-            'skip_download': True, 
-            'quiet': True, 
-            'outtmpl': temp_filename
-        }
-        
-        url = f"https://www.youtube.com/watch?v={video_id}"
-        
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
-
-        if not os.path.exists(expected_filename):
-            raise ValueError("No transcript found")
-
-        vtt = webvtt.read(expected_filename)
+        transcript_data = YouTubeTranscriptApi.get_transcript(video_id, languages=['en', 'en-US', 'en-GB'])
         
         transcript_list = []
         full_text_parts = []
         
-        for caption in vtt:
-            text = caption.text.replace('\n', ' ').strip()
-            
-            # Convert timestamp (e.g., '00:00:12.240') to total seconds
-            try:
-                h, m, s = caption.start.split(':')
-                s, ms = s.split('.')
-                total_seconds = int(h) * 3600 + int(m) * 60 + int(s) + float(ms) / 1000
-            except:
-                total_seconds = 0
+        for item in transcript_data:
+            text = item['text'].replace('\n', ' ').strip()
+            total_seconds = item['start']
                 
             transcript_list.append({
                 "text": text,
@@ -129,17 +104,11 @@ def get_transcript(video_id):
             full_text_parts.append(text)
 
         full_text = " ".join(full_text_parts)
-        
-        # Cleanup
-        try:
-            os.remove(expected_filename)
-        except:
-            pass
             
         return full_text, transcript_list
 
     except Exception as e:
-        raise ValueError(str(e))
+        raise ValueError(f"No transcript found or video blocked: {str(e)}")
 
 
 
