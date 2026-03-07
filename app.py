@@ -41,7 +41,9 @@ client = Groq(api_key=GROQ_API_KEY)
 
 # Switched model to standard Llama 3 8B to avoid rate limiting on the 70B model free tier.
 # You can also try "mixtral-8x7b-32768" or "llama-3.1-8b-instant"
-MODEL = "llama3-8b-8192"
+# Switched model to Llama 3.1 8B Instant to avoid rate limiting and use a supported model
+# You can also try "mixtral-8x7b-32768"
+MODEL = "llama-3.1-8b-instant"
 
 
 # ─────────────────────────────────────
