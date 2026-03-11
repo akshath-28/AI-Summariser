@@ -91,19 +91,16 @@ def extract_video_id(url):
 def get_transcript(video_id):
     try:
         temp_dir = tempfile.gettempdir()
-        temp_filename = os.path.join(temp_dir, f"{str(uuid.uuid4())}.%(ext)s")
-        expected_filename = temp_filename.replace('%(ext)s', 'en.vtt')
+        base_uuid = str(uuid.uuid4())
+        
+        # We use a general outtmpl and glob for it later
+        temp_filename = os.path.join(temp_dir, f"{base_uuid}.%(ext)s")
         
         # Bypassing the Render IP ban
-        ydl_opts = {
-            'writesubtitles': True, 
-            'writeautomaticsub': True,
-            'subtitleslangs': ['en'], 
+        ydl_opts_base = {
             'skip_download': True,
             'ignore_no_formats_error': True,
-            'format': 'bestaudio/best',
             'quiet': True, 
-            'outtmpl': temp_filename,
             'extractor_args': {'youtube': {'player_client': ['web_safari', 'android']}},
             'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         }
@@ -112,20 +109,87 @@ def get_transcript(video_id):
         youtube_cookies = os.getenv("YOUTUBE_COOKIES")
         cookie_file = None
         if youtube_cookies:
-            cookie_file = os.path.join(temp_dir, "youtube_cookies.txt")
+            cookie_file = os.path.join(temp_dir, f"youtube_cookies_{base_uuid}.txt")
             with open(cookie_file, "w") as f:
                 f.write(youtube_cookies)
-            ydl_opts['cookiefile'] = cookie_file
+            ydl_opts_base['cookiefile'] = cookie_file
         
         url = f"https://www.youtube.com/watch?v={video_id}"
         
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        # Stage 1: Extract info to find available subtitles
+        with yt_dlp.YoutubeDL(ydl_opts_base) as ydl:
+            info = ydl.extract_info(url, download=False)
+            
+        if not info:
+             raise ValueError("Could not extract video info.")
+
+        subs = info.get('subtitles', {})
+        auto_subs = info.get('automatic_captions', {})
+        
+        manual_langs = list(subs.keys())
+        auto_langs = list(auto_subs.keys())
+        
+        target_lang = None
+        
+        # 1. Prefer manual english
+        for lang in ['en', 'en-US', 'en-GB']:
+            if lang in manual_langs:
+                target_lang = lang
+                break
+                
+        # 2. Prefer auto english
+        if not target_lang:
+            for lang in ['en', 'en-orig', 'en-US', 'en-GB']:
+                if lang in auto_langs:
+                    target_lang = lang
+                    break
+                    
+        # 3. Fallback to any manual language
+        if not target_lang and manual_langs:
+            target_lang = manual_langs[0]
+            
+        # 4. Fallback to any auto language
+        if not target_lang and auto_langs:
+            target_lang = auto_langs[0]
+            
+        if not target_lang:
+            raise ValueError("No transcript found (the video has no captions available in any language)")
+
+        # Stage 2: Download the chosen subtitle
+        ydl_opts_download = ydl_opts_base.copy()
+        ydl_opts_download.update({
+            'writesubtitles': True, 
+            'writeautomaticsub': True,
+            'subtitleslangs': [target_lang], 
+            'subtitlesformat': 'vtt',
+            'format': 'bestaudio/best',
+            'outtmpl': temp_filename,
+        })
+        
+        with yt_dlp.YoutubeDL(ydl_opts_download) as ydl:
             ydl.download([url])
 
-        if not os.path.exists(expected_filename):
-            raise ValueError("No transcript found (the video may not have English captions)")
+        # glob to find the actual downloaded file since yt-dlp might append target_lang differently
+        import glob
+        downloaded_files = glob.glob(os.path.join(temp_dir, f"{base_uuid}*"))
+        
+        vtt_file = None
+        for f in downloaded_files:
+            if f.endswith('.vtt'):
+                vtt_file = f
+                break
+                
+        if not vtt_file:
+            # Cleanup anything downloaded
+            for f in downloaded_files:
+                try: os.remove(f)
+                except: pass
+            if cookie_file and os.path.exists(cookie_file):
+                try: os.remove(cookie_file)
+                except: pass
+            raise ValueError(f"Failed to download transcript for language: {target_lang}")
 
-        vtt = webvtt.read(expected_filename)
+        vtt = webvtt.read(vtt_file)
         
         transcript_list = []
         full_text_parts = []
@@ -149,10 +213,12 @@ def get_transcript(video_id):
 
         full_text = " ".join(full_text_parts)
         
-        try:
-            os.remove(expected_filename)
-        except:
-            pass
+        # Cleanup
+        for f in downloaded_files:
+            try:
+                os.remove(f)
+            except:
+                pass
             
         if cookie_file and os.path.exists(cookie_file):
             try:
